@@ -131,6 +131,7 @@ async def execute_moderation(
     ai_result: dict,
     is_webhook: bool,
     account_age: int,
+    on_chain_data: Optional[dict] = None,
 ):
     """Ejecuta la política de acción gradual con logging detallado."""
     confidence = ai_result.get("confidence", 0.0)
@@ -163,6 +164,17 @@ async def execute_moderation(
             embed.add_field(name="Vector de Ataque", value=f"`{attack_vector}`", inline=True)
             embed.add_field(name="Confianza IA", value=f"**{confidence * 100:.1f}%**", inline=True)
             embed.add_field(name="Latencia Motor", value=f"{latency_ms} ms", inline=True)
+            if on_chain_data and on_chain_data.get("detected"):
+                embed.add_field(
+                    name="⛓️ Auditoría On-Chain Solana",
+                    value=(
+                        f"• Dirección: `{on_chain_data['address'][:8]}...{on_chain_data['address'][-6:]}`\n"
+                        f"• Saldo: `{on_chain_data.get('balance_sol', 0)} SOL` | Red: `{on_chain_data.get('network', 'Solana')}`\n"
+                        f"• Riesgo On-Chain: **{on_chain_data.get('risk_assessment')}**"
+                    ),
+                    inline=False,
+                )
+
             embed.add_field(name="Canal", value=message.channel.mention, inline=True)
             embed.add_field(name="Diagnóstico IA", value=reason, inline=False)
             embed.add_field(name="Contenido del Mensaje", value=f"```{message.content[:700]}```", inline=False)
@@ -218,6 +230,18 @@ async def execute_moderation(
             embed.add_field(name="Canal Afectado", value=f"<#{channel_id}>", inline=True)
             embed.add_field(name="Tiempo de Reacción", value=f"{latency_ms} ms", inline=True)
             embed.add_field(name="Acción Aplicada", value="Borrado preventivo + Timeout 10m" if timeout_applied else "Mensaje borrado", inline=True)
+
+            if on_chain_data and on_chain_data.get("detected"):
+                embed.add_field(
+                    name="⛓️ Auditoría On-Chain Solana (Mainnet)",
+                    value=(
+                        f"• Dirección: `{on_chain_data['address'][:8]}...{on_chain_data['address'][-6:]}`\n"
+                        f"• Saldo: `{on_chain_data.get('balance_sol', 0)} SOL` | Red: `{on_chain_data.get('network', 'Solana')}`\n"
+                        f"• Diagnóstico On-Chain: **{on_chain_data.get('risk_assessment')}**"
+                    ),
+                    inline=False,
+                )
+
             embed.add_field(name="Diagnóstico Técnico", value=reason, inline=False)
             embed.add_field(name="Copia de Seguridad del Mensaje", value=f"```{original_content[:800]}```", inline=False)
             embed.set_footer(text="Si fue un falso positivo, cualquier moderador puede restaurarlo abajo ⬇️")

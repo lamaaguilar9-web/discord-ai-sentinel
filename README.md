@@ -17,11 +17,12 @@ In the Solana and Web3 ecosystem, malicious actors steal millions of dollars not
 ## 💡 The Solution: Discord AI Sentinel
 **Discord AI Sentinel** is a lightweight, high-speed security guard engineered specifically for Web3 communities:
 - **Heuristic Pre-filter (Level 0)**: Bypasses 96%+ of chat traffic with zero API cost and 0ms latency.
-- **Semantic Intent Classifier (Level 1 - Gemini Flash)**: Analyzes the psychological intent, urgency, and deceptive indicators of suspicious messages.
+- **Semantic Intent Classifier (Level 1 - Gemini Flash / OpenRouter)**: Analyzes psychological intent, urgency, and deceptive indicators of suspicious messages.
+- **On-Chain Solana Security Sensor (Level 2)**: Audits extracted base58 addresses, mint contracts, and balances via zero-cost Solana JSON-RPC in parallel (<300ms).
 - **Compromised Webhook Scrutiny**: Inspects webhook messages with the same rigor as unverified users.
 - **Adaptive Action Protocol**:
   - **Level 1 (Confidence 70% - 84%)**: Interactive alert to private mod channel with `[Delete & Timeout]` and `[Dismiss]` buttons.
-  - **Level 2 (Confidence >= 85%)**: Instant deletion + 10-minute timeout + private log with **1-click restore backup** to recover false positives.
+  - **Level 2 (Confidence >= 85%)**: Instant deletion + 10-minute timeout + private log with on-chain audit and **1-click restore backup** to recover false positives.
 
 ---
 
@@ -34,14 +35,17 @@ flowchart TD
     W -->|Yes: Admin / Core Team / Holder| PASS[Pass Through - 0 Cost / 0 Latency]
     W -->|No: Standard User or Webhook| PF{Pre-filter Heuristic Check}
     
-    PF -->|No External Links or Mass Mentions| PASS
-    PF -->|Trigger: Link + Deceptive Words or Webhook| AI[Gemini Flash Semantic Classifier]
+    PF -->|No External Links or Mentions| PASS
+    PF -->|Trigger: Link + Deceptive Words or Webhook| SCAN[On-Chain Solana Scanner & Gemini Flash]
     
-    AI --> DEC{Confidence & Vector Analysis}
+    SCAN -->|Zero-cost JSON-RPC| SOL[(Solana Blockchain State)]
+    SCAN -->|Semantic Analysis| AI[Gemini Flash / OpenRouter]
+    
+    AI & SOL --> DEC{Confidence & Threat Vector}
     
     DEC -->|< 70%: Legitimate| PASS
     DEC -->|70% - 84%: Suspicious| L1[Level 1: Private Mod Alert with Action Buttons]
-    DEC -->|>= 85%: Critical Threat| L2[Level 2: Auto Delete + 10m Timeout + Backup Log]
+    DEC -->|>= 85%: Critical Threat| L2[Level 2: Auto Delete + 10m Timeout + On-Chain Log]
     
     L2 --> ROLL[Mod Channel: 1-Click Instant Restore Button]
 ```

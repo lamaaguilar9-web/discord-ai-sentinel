@@ -17,6 +17,7 @@ from discord.ext import commands
 from datetime import datetime, timezone
 from config import settings
 from ai_guard import should_inspect, analyze_semantic_intent
+from solana_audit import scan_solana_threats
 from moderation import (
     is_author_whitelisted,
     get_account_age_days,
@@ -110,14 +111,24 @@ async def on_message(message: discord.Message):
 
     logger.info(f"🔍 Mensaje sospechoso detectado. Motivo pre-filtro: '{filter_reason}'. Evaluando con IA...")
 
-    # 4. Clasificación Semántica con Gemini Flash
+    # 4. Auditoría On-Chain pasiva (Si contiene dirección de Solana)
+    on_chain_data = await scan_solana_threats(message.content)
+
     author_info = (
         f"Tipo: {'WEBHOOK COMPROMETIDO (Simulado o real)' if is_webhook else 'Usuario Normal'}\n"
         f"Nombre: {message.author.display_name}\n"
         f"Antigüedad de cuenta: {account_age} días\n"
         f"Canal: #{message.channel.name}"
     )
+    if on_chain_data and on_chain_data.get("detected"):
+        author_info += (
+            f"\n--- AUDITORÍA ON-CHAIN SOLANA ---\n"
+            f"Dirección: {on_chain_data['address']}\n"
+            f"Saldo: {on_chain_data.get('balance_sol')} SOL\n"
+            f"Riesgo On-Chain: {on_chain_data.get('risk_assessment')}"
+        )
 
+    # 5. Clasificación Semántica con Gemini Flash
     ai_result = await analyze_semantic_intent(
         text=message.content,
         author_metadata=author_info,
@@ -129,13 +140,14 @@ async def on_message(message: discord.Message):
         f"Latencia={ai_result.get('latency_ms')}ms"
     )
 
-    # 5. Ejecución de la Acción Gradual (Nivel 1 o Nivel 2)
+    # 6. Ejecución de la Acción Gradual con datos on-chain
     await execute_moderation(
         bot=bot,
         message=message,
         ai_result=ai_result,
         is_webhook=is_webhook,
         account_age=account_age,
+        on_chain_data=on_chain_data,
     )
 
     # Procesar comandos regulares
@@ -268,9 +280,14 @@ async def cmd_setchannel(ctx: commands.Context):
 async def cmd_test(ctx: commands.Context, *, texto: str):
     """Evalúa un texto sospechoso con !test <texto>"""
     async with ctx.typing():
+        on_chain_data = await scan_solana_threats(texto)
+        author_info = f"Test manual por Admin: {ctx.author.display_name}"
+        if on_chain_data and on_chain_data.get("detected"):
+            author_info += f"\nOn-Chain Solana: {on_chain_data['address']} (Saldo: {on_chain_data.get('balance_sol')} SOL, Riesgo: {on_chain_data.get('risk_assessment')})"
+
         result = await analyze_semantic_intent(
             text=texto,
-            author_metadata=f"Test manual por Admin: {ctx.author.display_name}",
+            author_metadata=author_info,
         )
 
     is_mal = result.get("is_malicious", False)
@@ -285,6 +302,18 @@ async def cmd_test(ctx: commands.Context, *, texto: str):
     embed.add_field(name="Confianza", value=f"**{conf * 100:.1f}%**", inline=True)
     embed.add_field(name="Vector", value=f"`{result.get('attack_vector')}`", inline=True)
     embed.add_field(name="Latencia Motor", value=f"{result.get('latency_ms')} ms", inline=True)
+
+    if on_chain_data and on_chain_data.get("detected"):
+        embed.add_field(
+            name="⛓️ Auditoría On-Chain Solana",
+            value=(
+                f"• Dirección: `{on_chain_data['address'][:8]}...{on_chain_data['address'][-6:]}`\n"
+                f"• Saldo: `{on_chain_data.get('balance_sol', 0)} SOL`\n"
+                f"• Riesgo On-Chain: **{on_chain_data.get('risk_assessment')}**"
+            ),
+            inline=False,
+        )
+
     embed.add_field(name="Diagnóstico", value=result.get("reason", "Sin diagnóstico"), inline=False)
     embed.add_field(name="Texto Evaluado", value=f"```{texto[:500]}```", inline=False)
 
@@ -312,6 +341,11 @@ async def cmd_simular(ctx: commands.Context):
     embed.add_field(name="Canal de Ataque", value=ctx.channel.mention, inline=True)
     embed.add_field(name="Tiempo de Reacción", value="340 ms", inline=True)
     embed.add_field(name="Acción Aplicada", value="Borrado preventivo + Timeout 10m", inline=True)
+    embed.add_field(
+        name="⛓️ Auditoría On-Chain Solana (Mainnet)",
+        value="• Billetera de Drenador: `7xKXtg2C...s45Y`\n• Saldo: `0.0 SOL` (Fondos extraídos al instante)\n• Diagnóstico On-Chain: **ALTO (Billetera nueva / Desechable)**",
+        inline=False,
+    )
     embed.add_field(name="Diagnóstico Técnico", value="Ingeniería social agresiva con mención global (@everyone), urgencia artificial y redirección a dominio malicioso (.xyz) típico de drenadores de billeteras Solana.", inline=False)
     embed.add_field(name="Copia de Seguridad del Mensaje", value=f"```{sample_scam}```", inline=False)
     embed.set_footer(text="Si fue un falso positivo, cualquier moderador puede restaurarlo abajo ⬇️")
