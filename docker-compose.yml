@@ -1,0 +1,13 @@
+services:
+  discord-ai-sentinel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: discord_ai_sentinel
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONUNBUFFERED=1
