@@ -4,6 +4,9 @@
 > **Tracks**: *Security* | *AI Agents* | *Community Tooling*  
 > **Key Innovation**: Semantic intent detection via Gemini Flash + Zero-lag pre-filtering + **Compromised Webhook Defense** with human-in-the-loop rollback.
 
+[![Watch Demo Video](https://img.shields.io/badge/▶_Watch_Demo_Video-Loom-625df5?style=for-the-badge&logo=loom&logoColor=white)](https://www.loom.com/share/3558ce43bcb14990877c6518ed89ce8d)
+**🎥 Live Interactive Video Walkthrough**: [https://www.loom.com/share/3558ce43bcb14990877c6518ed89ce8d](https://www.loom.com/share/3558ce43bcb14990877c6518ed89ce8d)
+
 ---
 
 ## 🎯 The Problem in Web3 & DAOs
