@@ -9,7 +9,7 @@ class Settings(BaseSettings):
 
     # OpenRouter API (Recomendado con saldo)
     OPENROUTER_API_KEY: str = ""
-    OPENROUTER_MODEL: str = "google/gemini-3.8-flash"
+    OPENROUTER_MODEL: str = "google/gemini-2.5-flash"
 
     # Google Gemini API directo (Opcional)
     GEMINI_API_KEY: str = ""

@@ -111,6 +111,55 @@ def should_inspect(
     return False, "Tráfico normal sin patrones de riesgo"
 
 
+def evaluate_offline_heuristics(
+    text: str,
+    start_time: float,
+    fallback_origin: str = "Fallback Heurístico Local"
+) -> Dict[str, Any]:
+    """
+    Motor Heurístico de Defensa en Profundidad (Offline & Fail-Secure).
+    Se activa si la API externa falla, tiene timeout o no hay llaves configuradas.
+    Garantiza que un ataque nunca pase desapercibido por problemas de red.
+    """
+    latency = round((time.perf_counter() - start_time) * 1000, 2)
+    lower = text.lower()
+
+    if any(w in lower for w in ["sincroniza", "sync", "ticket", "helpdesk", "valida tu nodo", "validator", "connect wallet"]):
+        return {
+            "is_malicious": True,
+            "confidence": 0.92,
+            "attack_vector": "FAKE_SUPPORT",
+            "reason": f"[{fallback_origin}] Detección heurística: solicitud no solicitada de validación de nodo, soporte falso o sincronización de billetera.",
+            "latency_ms": latency,
+        }
+
+    if any(w in lower for w in ["migrar", "migration", "vulnerabilidad", "congelados", "anuncio oficial"]):
+        return {
+            "is_malicious": True,
+            "confidence": 0.98,
+            "attack_vector": "COMPROMISED_WEBHOOK",
+            "reason": f"[{fallback_origin}] Detección heurística: urgencia artificial anunciando migración obligatoria o vulnerabilidad en contratos.",
+            "latency_ms": latency,
+        }
+
+    if any(w in lower for w in ["airdrop", "claim", "free sol", "drainer", "giveaway", "recompensa", "bonus"]):
+        return {
+            "is_malicious": True,
+            "confidence": 0.95,
+            "attack_vector": "AIRDROP_SCAM",
+            "reason": f"[{fallback_origin}] Detección heurística: airdrop no verificado, reclamo de fondos de alta urgencia o patrón típico de drenador.",
+            "latency_ms": latency,
+        }
+
+    return {
+        "is_malicious": False,
+        "confidence": 0.1,
+        "attack_vector": "NONE",
+        "reason": f"[{fallback_origin}] Mensaje evaluado sin indicios de riesgo crítico.",
+        "latency_ms": latency,
+    }
+
+
 async def analyze_semantic_intent(
     text: str,
     author_metadata: str,
@@ -118,11 +167,12 @@ async def analyze_semantic_intent(
     """
     Consulta Gemini Flash para clasificar la intención semántica del mensaje.
     Retorna métricas de confianza, vector de ataque, motivo y latencia.
+    Arquitectura Fail-Secure: Si la API externa falla o tiene timeout, activa el motor heurístico local.
     """
     start_time = time.perf_counter()
 
     # --------------------------------------------------------------------------
-    # 1. Prioridad: OpenRouter API (Con saldo del usuario)
+    # 1. Prioridad: OpenRouter API
     # --------------------------------------------------------------------------
     if settings.OPENROUTER_API_KEY:
         openrouter_url = "https://openrouter.ai/api/v1/chat/completions"
@@ -149,7 +199,7 @@ async def analyze_semantic_intent(
         }
 
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=4.0) as client:
                 resp = await client.post(openrouter_url, headers=headers, json=payload)
                 latency = round((time.perf_counter() - start_time) * 1000, 2)
 
@@ -169,22 +219,19 @@ async def analyze_semantic_intent(
                     data["latency_ms"] = latency
                     return data
                 else:
-                    return {
-                        "is_malicious": False,
-                        "confidence": 0.0,
-                        "attack_vector": "API_ERROR",
-                        "reason": f"Error HTTP {resp.status_code} desde OpenRouter: {resp.text[:120]}",
-                        "latency_ms": latency,
-                    }
+                    # Fallback inmediato a heurística local ante error HTTP
+                    return evaluate_offline_heuristics(
+                        text=text,
+                        start_time=start_time,
+                        fallback_origin=f"Fallback por HTTP {resp.status_code} en OpenRouter"
+                    )
         except Exception as e:
-            latency = round((time.perf_counter() - start_time) * 1000, 2)
-            return {
-                "is_malicious": False,
-                "confidence": 0.0,
-                "attack_vector": "EXCEPTION",
-                "reason": f"Fallo de conexión con OpenRouter: {str(e)}",
-                "latency_ms": latency,
-            }
+            # Fallback inmediato ante Timeout o excepción de conexión
+            return evaluate_offline_heuristics(
+                text=text,
+                start_time=start_time,
+                fallback_origin=f"Fallback por contingencia de red/timeout ({type(e).__name__})"
+            )
 
     # --------------------------------------------------------------------------
     # 2. Alternativa: Google Gemini API Directo
@@ -228,60 +275,19 @@ async def analyze_semantic_intent(
                     data["latency_ms"] = latency
                     return data
                 else:
-                    return {
-                        "is_malicious": False,
-                        "confidence": 0.0,
-                        "attack_vector": "API_ERROR",
-                        "reason": f"Error HTTP {resp.status_code} desde Gemini API",
-                        "latency_ms": latency,
-                    }
+                    return evaluate_offline_heuristics(
+                        text=text,
+                        start_time=start_time,
+                        fallback_origin=f"Fallback por HTTP {resp.status_code} en Gemini API"
+                    )
         except Exception as e:
-            latency = round((time.perf_counter() - start_time) * 1000, 2)
-            return {
-                "is_malicious": False,
-                "confidence": 0.0,
-                "attack_vector": "EXCEPTION",
-                "reason": f"Fallo de conexión en AI Guard: {str(e)}",
-                "latency_ms": latency,
-            }
+            return evaluate_offline_heuristics(
+                text=text,
+                start_time=start_time,
+                fallback_origin=f"Fallback por excepción en Gemini API ({type(e).__name__})"
+            )
 
     # --------------------------------------------------------------------------
-    # 3. Fallback: Simulación Heurística Offline (Cuando no hay ninguna clave)
+    # 3. Modo Local: Heurísticas Offline por defecto
     # --------------------------------------------------------------------------
-    latency = round((time.perf_counter() - start_time) * 1000, 2)
-    lower = text.lower()
-    
-    if any(w in lower for w in ["sincroniza", "sync", "ticket", "helpdesk", "valida tu nodo", "validator"]):
-        return {
-            "is_malicious": True,
-            "confidence": 0.92,
-            "attack_vector": "FAKE_SUPPORT",
-            "reason": "Detección heurística: solicitud no solicitada de validación de nodo o sincronización de billetera.",
-            "latency_ms": latency,
-        }
-    
-    if any(w in lower for w in ["migrar", "migration", "vulnerabilidad", "congelados", "anuncio oficial"]):
-        return {
-            "is_malicious": True,
-            "confidence": 0.98,
-            "attack_vector": "COMPROMISED_WEBHOOK",
-            "reason": "Detección heurística: urgencia artificial anunciando migración obligatoria de fondos.",
-            "latency_ms": latency,
-        }
-
-    if any(w in lower for w in ["airdrop", "claim", "free sol", "connect wallet", "drainer", "giveaway"]):
-        return {
-            "is_malicious": True,
-            "confidence": 0.95,
-            "attack_vector": "AIRDROP_SCAM",
-            "reason": "Detección heurística: promesa de airdrop o reclamo de fondos no verificado.",
-            "latency_ms": latency,
-        }
-
-    return {
-        "is_malicious": False,
-        "confidence": 0.1,
-        "attack_vector": "NONE",
-        "reason": "Mensaje informativo o de conversación sin intención dañina.",
-        "latency_ms": latency,
-    }
+    return evaluate_offline_heuristics(text=text, start_time=start_time, fallback_origin="Modo Local Heurístico")

@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Discord AI Sentinel | Autonomous Web3 Security & Phishing Defense</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-main: #0a0d14;
+    --bg-card: #111622;
+    --bg-accent: #171f30;
+    --border: #232d42;
+    --primary: #5865F2; /* Discord Blurple */
+    --solana: #14F195;
+    --text-main: #f1f5f9;
+    --text-muted: #94a3b8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', -apple-system, sans-serif; }
+  body {
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    line-height: 1.6;
+    padding-bottom: 80px;
+  }
+  .container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 20px;
+  }
+  nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 40px;
+  }
+  .logo {
+    font-size: 1.25rem;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .badge {
+    background: rgba(88, 101, 242, 0.15);
+    color: var(--primary);
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 9999px;
+    border: 1px solid rgba(88, 101, 242, 0.3);
+  }
+  .hero {
+    text-align: center;
+    padding: 20px 0 50px;
+  }
+  .hero-tag {
+    display: inline-block;
+    background: rgba(20, 241, 149, 0.1);
+    color: var(--solana);
+    font-size: 0.8rem;
+    font-weight: 700;
+    padding: 6px 14px;
+    border-radius: 9999px;
+    border: 1px solid rgba(20, 241, 149, 0.25);
+    margin-bottom: 20px;
+  }
+  h1 {
+    font-size: 2.75rem;
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    line-height: 1.15;
+    margin-bottom: 18px;
+  }
+  h1 span {
+    background: linear-gradient(135deg, #5865F2, #14F195);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .hero p {
+    font-size: 1.15rem;
+    color: var(--text-muted);
+    max-width: 680px;
+    margin: 0 auto 30px;
+  }
+  .video-box {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    text-align: center;
+    margin-bottom: 50px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+  }
+  .video-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    background: #625df5;
+    color: #fff;
+    font-weight: 800;
+    font-size: 1.05rem;
+    padding: 14px 32px;
+    border-radius: 12px;
+    text-decoration: none;
+    transition: all 0.2s;
+  }
+  .video-btn:hover {
+    background: #504be0;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(98, 93, 245, 0.35);
+  }
+  .pricing-card {
+    background: var(--bg-card);
+    border: 2px solid var(--primary);
+    border-radius: 20px;
+    padding: 40px;
+    position: relative;
+    max-width: 540px;
+    margin: 0 auto;
+    box-shadow: 0 0 50px rgba(88, 101, 242, 0.15);
+  }
+  .popular-tag {
+    position: absolute;
+    top: -14px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--primary);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    padding: 4px 14px;
+    border-radius: 9999px;
+    letter-spacing: 0.05em;
+  }
+  .price {
+    font-size: 3.5rem;
+    font-weight: 900;
+    margin: 15px 0 5px;
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 6px;
+  }
+  .price span {
+    font-size: 1.1rem;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+  .features-list {
+    list-style: none;
+    margin: 25px 0;
+    text-align: left;
+  }
+  .features-list li {
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.95rem;
+  }
+  .check {
+    color: var(--solana);
+    font-weight: bold;
+    font-size: 1.1rem;
+  }
+  .pay-btn-paypal {
+    display: block;
+    width: 100%;
+    background: #0070ba;
+    color: #fff;
+    font-weight: 800;
+    font-size: 1.05rem;
+    padding: 16px;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    text-align: center;
+    transition: all 0.2s;
+    margin-bottom: 16px;
+  }
+  .pay-btn-paypal:hover {
+    background: #005ea6;
+    box-shadow: 0 10px 20px rgba(0, 112, 186, 0.35);
+  }
+  .crypto-box {
+    background: var(--bg-accent);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+    text-align: left;
+    margin-top: 15px;
+  }
+  .crypto-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--solana);
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .wallet-input {
+    width: 100%;
+    background: #0a0d14;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    color: #f1f5f9;
+    font-family: monospace;
+    font-size: 0.8rem;
+    margin-bottom: 10px;
+    word-break: break-all;
+  }
+  .trial-box {
+    margin-top: 25px;
+    padding-top: 20px;
+    border-top: 1px dashed var(--border);
+    text-align: center;
+  }
+  .trial-btn {
+    display: inline-block;
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.9rem;
+    padding: 10px 20px;
+    border-radius: 10px;
+    text-decoration: none;
+    transition: all 0.2s;
+    border: 1px solid var(--border);
+  }
+  .trial-btn:hover {
+    background: rgba(255,255,255,0.15);
+    border-color: #fff;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <nav>
+    <div class="logo">
+      🛡️ Discord AI Sentinel
+      <span class="badge">DoraHacks BUIDL #48370</span>
+    </div>
+    <div class="badge" style="background: rgba(20,241,149,0.1); color: var(--solana); border-color: rgba(20,241,149,0.3);">
+      🟢 24/7 Cloud Active
+    </div>
+  </nav>
+
+  <div class="hero">
+    <div class="hero-tag">⚡ ZERO-TRUST WEBHOOK & PHISHING DEFENSE</div>
+    <h1>Stop Discord Server Drains <span>Before They Happen</span></h1>
+    <p>
+      Traditional bots whitelist webhooks and fail against hijacked staff accounts. Discord AI Sentinel intercepts dynamic drainers and social engineering in real-time.
+    </p>
+  </div>
+
+  <div class="video-box">
+    <h3 style="margin-bottom: 8px;">🎥 Watch the 2-Minute Defense in Action</h3>
+    <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 18px;">
+      Live demonstration: neutralizing compromised webhook attacks with 0ms pre-filtering & Gemini Flash.
+    </p>
+    <a href="https://www.loom.com/share/3558ce43bcb14990877c6518ed89ce8d" target="_blank" class="video-btn">
+      ▶ Play Interactive Loom Walkthrough
+    </a>
+  </div>
+
+  <!-- Pricing Card -->
+  <div class="pricing-card">
+    <div class="popular-tag">AUTOMATED SELF-SERVICE CHECKOUT</div>
+    <h3 style="font-size: 1.4rem; font-weight: 800;">DAO Sentinel License</h3>
+    <p style="color: var(--text-muted); font-size: 0.9rem;">Complete autonomous coverage for your server</p>
+    
+    <div class="price">
+      $149 <span>/ month</span>
+    </div>
+
+    <ul class="features-list">
+      <li><span class="check">✔</span> <strong>Compromised Webhook Defense</strong> (Zero-trust payload inspection)</li>
+      <li><span class="check">✔</span> <strong>Dynamic Phishing Block</strong> (Intercepts 15-minute ephemeral domains)</li>
+      <li><span class="check">✔</span> <strong>On-Chain Solana Sensor</strong> (Audits recipient wallets in &lt;300ms)</li>
+      <li><span class="check">✔</span> <strong>1-Click Human Rollback</strong> (Zero false positive penalties)</li>
+      <li><span class="check">✔</span> <strong>Zero Server Installation</strong> (Runs 24/7 on our cloud infrastructure)</li>
+    </ul>
+
+    <!-- PayPal Automated Form -->
+    <form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_blank">
+      <input type="hidden" name="cmd" value="_xclick">
+      <input type="hidden" name="business" value="luis.growthhq@gmail.com">
+      <input type="hidden" name="item_name" value="Discord AI Sentinel - Community Security License">
+      <input type="hidden" name="amount" value="149.00">
+      <input type="hidden" name="currency_code" value="USD">
+      <input type="hidden" name="no_shipping" value="1">
+      <!-- Auto redirect to Discord Bot Invite on successful payment -->
+      <input type="hidden" name="return" value="https://discord.com/oauth2/authorize?client_id=1545908353107103845&permissions=1099511627776&scope=bot%20applications.commands">
+      
+      <button type="submit" class="pay-btn-paypal">
+        💳 Pay $149 USD with PayPal / Card (Instant Bot Setup)
+      </button>
+    </form>
+
+    <!-- Crypto / Solana Pay Box -->
+    <div class="crypto-box">
+      <div class="crypto-title">
+        <span>🪙 PAY WITH SOLANA (USDC)</span>
+        <span>$149.00 USDC</span>
+      </div>
+      <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 6px;">Send 149 USDC to verified treasury address:</div>
+      <input type="text" readonly value="5vuycXCzBiSesJYbbdtbLAdSJ59yhiPLTZhEU8uYH8RZ" class="wallet-input" id="walletAddr">
+      <button onclick="copyWallet()" style="width: 100%; background: #1f293d; color: var(--solana); border: 1px solid var(--border); padding: 9px; border-radius: 8px; font-size: 0.85rem; font-weight: 700; cursor: pointer; margin-bottom: 8px;">
+        📋 Copy Solana Address
+      </button>
+      <div style="font-size: 0.75rem; color: var(--text-muted); text-align: center;">
+        After sending, <a href="https://discord.com/oauth2/authorize?client_id=1545908353107103845&permissions=1099511627776&scope=bot%20applications.commands" target="_blank" style="color: var(--solana); font-weight: bold;">Click Here to Invite Sentinel to Your Server</a>.
+      </div>
+    </div>
+
+    <!-- Direct 7-Day Pilot Link -->
+    <div class="trial-box">
+      <a href="https://discord.com/oauth2/authorize?client_id=1545908353107103845&permissions=1099511627776&scope=bot%20applications.commands" target="_blank" class="trial-btn">
+        🛡️ Or Start 7-Day Free Pilot in Shadow Mode (1-Click Invite)
+      </a>
+    </div>
+  </div>
+</div>
+
+<script>
+function copyWallet() {
+  const copyText = document.getElementById("walletAddr");
+  copyText.select();
+  navigator.clipboard.writeText(copyText.value);
+  alert("Solana Treasury Address copied: 5vuycXCzBiSesJYbbdtbLAdSJ59yhiPLTZhEU8uYH8RZ\nSend 149 USDC and click the invite link to activate!");
+}
+</script>
+
+</body>
+</html>
