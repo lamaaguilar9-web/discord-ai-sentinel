@@ -24,6 +24,9 @@ import time
 import json
 import logging
 import asyncio
+import hashlib
+import sqlite3
+import uuid
 from typing import Any, Dict, List, Optional, Set, Tuple
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
@@ -403,6 +406,113 @@ class PersistentRestoreView(discord.ui.View):
         else:
             await interaction.response.send_message("❌ Canal original no encontrado o sin permisos de envío.", ephemeral=True)
 
+
+TICKETS_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tickets.db")
+
+def init_tickets_db():
+    with sqlite3.connect(TICKETS_DB_PATH) as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS escalation_tickets (
+                ticket_uuid TEXT PRIMARY KEY,
+                user_id TEXT,
+                channel_id TEXT,
+                message_id TEXT,
+                content TEXT,
+                reason TEXT,
+                status TEXT,
+                claimed_by TEXT,
+                created_at TEXT,
+                transcript_hash TEXT
+            );
+        """)
+init_tickets_db()
+
+def purge_expired_tickets(days: int = 90):
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    with sqlite3.connect(TICKETS_DB_PATH) as conn:
+        cur = conn.execute("DELETE FROM escalation_tickets WHERE created_at < ?", (cutoff,))
+        if cur.rowcount > 0:
+            logger.info(f"Purga automatica de compliance: {cur.rowcount} tickets antiguos eliminados.")
+
+
+class DynamicTicketView(discord.ui.View):
+    """Vista con custom_id parametrizado dinámicamente por ticket UUID."""
+    def __init__(self, ticket_uuid: str):
+        super().__init__(timeout=None)
+        self.ticket_uuid = ticket_uuid
+        
+        self.add_item(discord.ui.Button(
+            label="Tomar Caso / En Atención",
+            style=discord.ButtonStyle.primary,
+            emoji="🙋‍♂️",
+            custom_id=f"sentinel:claim:{ticket_uuid}"
+        ))
+        self.add_item(discord.ui.Button(
+            label="Marcar Resuelto",
+            style=discord.ButtonStyle.success,
+            emoji="✅",
+            custom_id=f"sentinel:resolve:{ticket_uuid}"
+        ))
+
+
+# ==============================================================================
+# PROTOCOLO DE ESCALADO HUMANO (DISPUTAS Y SOPORTE VIP)
+# ==============================================================================
+HUMAN_ESCALATION_KEYWORDS = {
+    "reembolso", "refund", "estafa", "scam", "demanda", "abogado",
+    "cobro", "tarjeta", "cargo no autorizado", "cancelar suscripcion",
+    "cancelar suscripción", "hablar con humano", "persona real",
+    "soporte humano", "atencion humana", "atención humana", "hablar con luis",
+    "llamar a luis", "contacto con luis", "hablar con un agente", "waive", "disputa"
+}
+
+def detect_human_escalation(content: str) -> Tuple[bool, str]:
+    text_lower = content.lower()
+    for kw in HUMAN_ESCALATION_KEYWORDS:
+        if kw in text_lower:
+            return True, f"Palabra clave de escalado detectada: '{kw}'"
+    return False, ""
+
+async def handle_human_escalation(bot: "SentinelBot", message: discord.Message, reason: str):
+    log_channel = bot.get_channel(Config.MOD_LOG_CHANNEL_ID) if Config.MOD_LOG_CHANNEL_ID else None
+    if not log_channel:
+        logger.warning(f"Escalado humano detectado pero no hay MOD_LOG_CHANNEL_ID configurado. Autor: {message.author}")
+        return
+
+    ticket_uuid = f"tk_{uuid.uuid4().hex[:8]}"
+    transcript_hash = hashlib.sha256(f"{message.id}:{message.content}".encode()).hexdigest()
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    # Registro atómico transaccional en SQLite
+    with sqlite3.connect(TICKETS_DB_PATH) as conn:
+        conn.execute(
+            """INSERT INTO escalation_tickets 
+               (ticket_uuid, user_id, channel_id, message_id, content, reason, status, claimed_by, created_at, transcript_hash)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (ticket_uuid, str(message.author.id), str(message.channel.id), str(message.id), message.content[:1000], reason, "OPEN", None, now_iso, transcript_hash)
+        )
+
+    embed = discord.Embed(
+        title=f"🚨 ESCALADO HUMANO — TICKET [{ticket_uuid}]",
+        description="Se detectó una solicitud sensible, disputa comercial o requerimiento de soporte humano.",
+        color=discord.Color.orange(),
+        timestamp=datetime.now(timezone.utc)
+    )
+    embed.add_field(name="Ticket UUID", value=f"`{ticket_uuid}`", inline=True)
+    embed.add_field(name="Usuario", value=f"{message.author.mention} (`{message.author.id}`)", inline=True)
+    embed.add_field(name="Canal", value=f"<#{message.channel.id}>", inline=True)
+    embed.add_field(name="Motivo", value=f"`{reason}`", inline=False)
+    embed.add_field(name="Contenido", value=f">>> {message.content[:800]}", inline=False)
+    embed.add_field(name="Hash Criptográfico (Integridad)", value=f"`SHA256:{transcript_hash[:16]}...`", inline=True)
+    embed.add_field(name="Retención Forense", value="`90 Días (Purga Automatizada)`", inline=True)
+    embed.add_field(name="Acción Preventiva", value="🛡️ **Automatizaciones punitivas en pausa** (Sin mute ni borrado).", inline=False)
+
+    await log_channel.send(embed=embed, view=DynamicTicketView(ticket_uuid))
+    try:
+        await message.add_reaction("⏳")
+    except Exception:
+        pass
+
 # ==============================================================================
 # 6. CAPA 4: EJECUTOR CENTRAL DE MODERACIÓN
 # ==============================================================================
@@ -505,10 +615,13 @@ class SentinelBot(commands.Bot):
         limits = httpx.Limits(max_keepalive_connections=20, max_connections=50)
         self.http_client = httpx.AsyncClient(timeout=httpx.Timeout(4.5), limits=limits)
 
-        # Registrar vistas persistentes para que funcionen tras reinicios
+        # Registrar vistas persistentes estáticas
         self.add_view(PersistentLevel1View())
         self.add_view(PersistentRestoreView())
-        logger.info("Vistas persistentes y HTTP Client inicializados.")
+
+        # Purga forense automática de retención a 90 días
+        purge_expired_tickets(90)
+        logger.info("Vistas persistentes y base de datos de tickets SQLite inicializadas.")
 
     async def close(self):
         if self.http_client:
@@ -517,6 +630,41 @@ class SentinelBot(commands.Bot):
         await super().close()
 
 bot = SentinelBot()
+
+@bot.event
+async def on_interaction(interaction: discord.Interaction):
+    if interaction.type != discord.InteractionType.component:
+        return
+
+    custom_id = interaction.data.get("custom_id", "")
+    if custom_id.startswith("sentinel:claim:"):
+        ticket_uuid = custom_id.split(":")[-1]
+        with sqlite3.connect(TICKETS_DB_PATH) as conn:
+            cur = conn.execute(
+                "UPDATE escalation_tickets SET status='CLAIMED', claimed_by=? WHERE ticket_uuid=? AND status='OPEN'",
+                (interaction.user.display_name, ticket_uuid)
+            )
+            if cur.rowcount == 0:
+                await interaction.response.send_message("⚠️ Este caso ya fue tomado por otro moderador o ya está resuelto.", ephemeral=True)
+                return
+
+        view = discord.ui.View(timeout=None)
+        view.add_item(discord.ui.Button(label=f"En atención por {interaction.user.display_name}", style=discord.ButtonStyle.secondary, emoji="💼", disabled=True))
+        view.add_item(discord.ui.Button(label="Marcar Resuelto", style=discord.ButtonStyle.success, emoji="✅", custom_id=f"sentinel:resolve:{ticket_uuid}"))
+        await interaction.response.edit_message(view=view)
+        await interaction.followup.send(f"💼 {interaction.user.mention} ha tomado el ticket `{ticket_uuid}` para atención directa.", ephemeral=False)
+
+    elif custom_id.startswith("sentinel:resolve:"):
+        ticket_uuid = custom_id.split(":")[-1]
+        with sqlite3.connect(TICKETS_DB_PATH) as conn:
+            conn.execute(
+                "UPDATE escalation_tickets SET status='RESOLVED' WHERE ticket_uuid=?",
+                (ticket_uuid,)
+            )
+        view = discord.ui.View(timeout=None)
+        view.add_item(discord.ui.Button(label=f"Resuelto por {interaction.user.display_name}", style=discord.ButtonStyle.success, emoji="✅", disabled=True))
+        await interaction.response.edit_message(view=view)
+        await interaction.followup.send(f"✅ Ticket `{ticket_uuid}` resuelto satisfactoriamente por {interaction.user.mention}.", ephemeral=False)
 
 @bot.event
 async def on_ready():
@@ -533,6 +681,13 @@ async def on_message(message: discord.Message):
 
     trusted, _ = is_whitelisted(message)
     if trusted:
+        await bot.process_commands(message)
+        return
+
+    # 1. Protocolo de escalado humano prioritario (Evita falsos positivos en clientes insatisfechos)
+    should_escalate, esc_reason = detect_human_escalation(message.content)
+    if should_escalate:
+        asyncio.create_task(handle_human_escalation(bot, message, esc_reason))
         await bot.process_commands(message)
         return
 
