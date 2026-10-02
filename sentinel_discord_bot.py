@@ -52,6 +52,10 @@ class Config:
     # Proveedor IA
     OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
     OPENROUTER_MODEL: str = os.getenv("OPENROUTER_MODEL", "google/gemini-2.5-flash")
+
+    # Proveedor IA Directo (Google Gemini Studio - Gratis y baja latencia 300-600ms)
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
     
     # Configuración RPC Solana (Se recomienda QuickNode/Helius en producción)
     SOLANA_RPC_URL: str = os.getenv("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com")
@@ -77,6 +81,14 @@ class Config:
     @classmethod
     def get_whitelisted_roles(cls) -> Set[str]:
         return {r.strip().lower() for r in cls.WHITELIST_ROLES.split(",") if r.strip()}
+
+    @classmethod
+    def get_ai_engine_label(cls) -> str:
+        if cls.GEMINI_API_KEY:
+            return f"Google Gemini Directo (`{cls.GEMINI_MODEL}`)"
+        elif cls.OPENROUTER_API_KEY:
+            return f"OpenRouter (`{cls.OPENROUTER_MODEL}`)"
+        return "Motor Heurístico Local (Offline Fail-Secure)"
 
 # Logging en terminal
 logging.basicConfig(
@@ -252,6 +264,57 @@ def evaluate_offline_heuristics(text: str, start_time: float, origin: str) -> Di
 async def analyze_semantic_intent(text: str, author_metadata: str, client: Optional[httpx.AsyncClient] = None) -> Dict[str, Any]:
     start_time = time.perf_counter()
 
+    # 1. Google Gemini API Directo (Latencia 300-600ms, Google AI Studio - Fail-Secure)
+    if Config.GEMINI_API_KEY:
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{Config.GEMINI_MODEL}:generateContent?key={Config.GEMINI_API_KEY}"
+        )
+        payload = {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [
+                        {
+                            "text": (
+                                f"{SYSTEM_PROMPT}\n\n"
+                                f"--- METADATOS DEL REMITENTE ---\n{author_metadata}\n\n"
+                                f"--- MENSAJE A EVALUAR ---\n\"\"\"{text}\"\"\""
+                            )
+                        }
+                    ],
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.1,
+                "response_mime_type": "application/json",
+            },
+        }
+        try:
+            async def do_gemini_post(c: httpx.AsyncClient):
+                return await c.post(url, json=payload)
+
+            if client and not client.is_closed:
+                resp = await do_gemini_post(client)
+            else:
+                async with httpx.AsyncClient(timeout=4.0) as temp_client:
+                    resp = await do_gemini_post(temp_client)
+
+            if resp.status_code == 200:
+                body = resp.json()
+                raw_json = body["candidates"][0]["content"]["parts"][0]["text"].strip()
+                if raw_json.startswith("```json"): raw_json = raw_json[7:]
+                if raw_json.startswith("```"): raw_json = raw_json[3:]
+                if raw_json.endswith("```"): raw_json = raw_json[:-3]
+                data = json.loads(raw_json.strip())
+                data["latency_ms"] = round((time.perf_counter() - start_time) * 1000, 2)
+                return data
+            else:
+                return evaluate_offline_heuristics(text, start_time, f"Fail-Secure (HTTP {resp.status_code} Gemini)")
+        except Exception as e:
+            return evaluate_offline_heuristics(text, start_time, f"Fail-Secure ({type(e).__name__} Gemini)")
+
+    # 2. OpenRouter API (Fallback o proveedor alternativo si está configurado)
     if Config.OPENROUTER_API_KEY:
         headers = {
             "Authorization": f"Bearer {Config.OPENROUTER_API_KEY}",
@@ -269,14 +332,14 @@ async def analyze_semantic_intent(text: str, author_metadata: str, client: Optio
             "response_format": {"type": "json_object"}
         }
         try:
-            async def do_post(c: httpx.AsyncClient):
+            async def do_openrouter_post(c: httpx.AsyncClient):
                 return await c.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
 
             if client and not client.is_closed:
-                resp = await do_post(client)
+                resp = await do_openrouter_post(client)
             else:
                 async with httpx.AsyncClient(timeout=4.5) as temp_client:
-                    resp = await do_post(temp_client)
+                    resp = await do_openrouter_post(temp_client)
 
             if resp.status_code == 200:
                 raw = resp.json()["choices"][0]["message"]["content"].strip()
@@ -287,10 +350,11 @@ async def analyze_semantic_intent(text: str, author_metadata: str, client: Optio
                 data["latency_ms"] = round((time.perf_counter() - start_time) * 1000, 2)
                 return data
             else:
-                return evaluate_offline_heuristics(text, start_time, f"Fail-Secure (HTTP {resp.status_code})")
+                return evaluate_offline_heuristics(text, start_time, f"Fail-Secure (HTTP {resp.status_code} OpenRouter)")
         except Exception as e:
-            return evaluate_offline_heuristics(text, start_time, f"Fail-Secure ({type(e).__name__})")
+            return evaluate_offline_heuristics(text, start_time, f"Fail-Secure ({type(e).__name__} OpenRouter)")
 
+    # 3. Motor Heurístico Local (Offline / Fail-Secure)
     return evaluate_offline_heuristics(text, start_time, "Motor Heurístico Local")
 
 # ==============================================================================
@@ -670,7 +734,7 @@ async def on_interaction(interaction: discord.Interaction):
 async def on_ready():
     logger.info("=" * 60)
     logger.info(f"🛡️  DISCORD AI SENTINEL GUARD ONLINE: {bot.user}")
-    logger.info(f"   Modelo IA: {Config.OPENROUTER_MODEL}")
+    logger.info(f"   Motor IA: {Config.get_ai_engine_label()}")
     logger.info(f"   Servidores Conectados: {len(bot.guilds)}")
     logger.info("=" * 60)
 
@@ -718,7 +782,7 @@ async def inspect_and_moderate(message: discord.Message, is_webhook: bool):
 @bot.tree.command(name="sentinel-status", description="Muestra el estado operativo del centinela de seguridad.")
 async def cmd_status_slash(interaction: discord.Interaction):
     embed = discord.Embed(title="🛡️ Estado Operativo de Discord AI Sentinel", color=discord.Color.blue())
-    embed.add_field(name="Motor de IA", value=f"`{Config.OPENROUTER_MODEL}`", inline=False)
+    embed.add_field(name="Motor de IA", value=Config.get_ai_engine_label(), inline=False)
     embed.add_field(name="Solana RPC", value=f"`{Config.SOLANA_RPC_URL}`", inline=False)
     embed.add_field(name="Canal de Alertas", value=f"<#{Config.MOD_LOG_CHANNEL_ID}>" if Config.MOD_LOG_CHANNEL_ID else "No asignado", inline=True)
     embed.add_field(name="Umbral Nivel 1 (Alerta)", value=f"{Config.THRESHOLD_LEVEL_1_ALERT*100:.0f}%", inline=True)
@@ -796,7 +860,7 @@ async def cmd_sync_slash(interaction: discord.Interaction):
 async def cmd_status_text(ctx: commands.Context):
     """Muestra el estado con !status"""
     embed = discord.Embed(title="🛡️ Estado Operativo de Discord AI Sentinel", color=discord.Color.blue())
-    embed.add_field(name="Motor de IA", value=f"`{Config.OPENROUTER_MODEL}`", inline=False)
+    embed.add_field(name="Motor de IA", value=Config.get_ai_engine_label(), inline=False)
     embed.add_field(name="Solana RPC", value=f"`{Config.SOLANA_RPC_URL}`", inline=False)
     embed.add_field(name="Canal de Alertas", value=f"<#{Config.MOD_LOG_CHANNEL_ID}>" if Config.MOD_LOG_CHANNEL_ID else "No asignado", inline=True)
     embed.add_field(name="Umbral Nivel 1 (Alerta)", value=f"{Config.THRESHOLD_LEVEL_1_ALERT*100:.0f}%", inline=True)
