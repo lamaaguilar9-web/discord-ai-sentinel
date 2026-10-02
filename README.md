@@ -129,4 +129,4 @@ python sentinel_discord_bot.py
 - [x] **Production Grade**: Comprehensive exception handling, non-blocking asynchronous architecture.
 - [x] **Zero False Positive Protection**: Dual-tier action policy + 1-click message restore for human moderators.
 - [x] **Compromised Webhook Defense**: Closes the most prevalent vector in crypto community hacks.
-- [x] **High-Speed & Cost Efficient**: Target de latencia en producción (300-600ms con Gemini directo; 1.5-2.3s vía aggregators como OpenRouter) y ~90-96% de reducción en llamadas API mediante pre-filtro heurístico.
+- [x] **High-Speed & Cost Efficient**: Latencia medida en producción (~2.0s con gemini-3.1-flash-lite directo en VPS; 1.5-2.3s vía aggregators como OpenRouter) y ~90-96% de reducción en llamadas API mediante pre-filtro heurístico.
