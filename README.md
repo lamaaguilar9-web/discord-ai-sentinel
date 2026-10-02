@@ -19,9 +19,9 @@ In the Solana and Web3 ecosystem, malicious actors steal millions of dollars not
 
 ## 💡 The Solution: Discord AI Sentinel
 **Discord AI Sentinel** is a lightweight, high-speed security guard engineered specifically for Web3 communities:
-- **Heuristic Pre-filter (Level 0)**: Bypasses 96%+ of chat traffic with zero API cost and 0ms latency.
+- **Heuristic Pre-filter (Level 0)**: Bypasses 90-96%+ (estimación en tráfico real) of chat traffic with zero API cost and 0ms latency.
 - **Semantic Intent Classifier (Level 1 - Gemini Flash / OpenRouter)**: Analyzes psychological intent, urgency, and deceptive indicators of suspicious messages.
-- **On-Chain Solana Security Sensor (Level 2)**: Audits extracted base58 addresses, mint contracts, and balances via zero-cost Solana JSON-RPC in parallel (<300ms).
+- **On-Chain Solana Security Sensor (Level 2)**: Audits extracted base58 addresses, mint contracts, and balances via zero-cost Solana JSON-RPC in parallel (target <500ms).
 - **Compromised Webhook Scrutiny**: Inspects webhook messages with the same rigor as unverified users.
 - **Adaptive Action Protocol**:
   - **Level 1 (Confidence 70% - 84%)**: Interactive alert to private mod channel with `[Delete & Timeout]` and `[Dismiss]` buttons.
@@ -68,11 +68,11 @@ pip install -r requirements.txt
 python simulate_attack.py
 ```
 
-### 2. Output Preview
+### 2. Output Preview (ejemplo con clave IA activa)
 ```text
 ================================================================================
 🧪 SIMULACIÓN DEL MOTOR DE INTELIGENCIA DE SEGURIDAD (DISCORD AI SENTINEL)
-================================================================================
+===============================================================================
 
 ▶ Escenario: 1. Conversación habitual legítima
   [PRE-FILTRO]: ✅ OMITIDO -> Tráfico normal sin patrones de riesgo (0ms de latencia, 0 costo)
@@ -109,9 +109,9 @@ Fill in:
 docker compose up -d --build
 ```
 
-### 3. Or Run Directly with Python
+### 3. Or Run Directly with Python (Canónico)
 ```bash
-python bot.py
+python sentinel_discord_bot.py
 ```
 
 ---
@@ -129,4 +129,4 @@ python bot.py
 - [x] **Production Grade**: Comprehensive exception handling, non-blocking asynchronous architecture.
 - [x] **Zero False Positive Protection**: Dual-tier action policy + 1-click message restore for human moderators.
 - [x] **Compromised Webhook Defense**: Closes the most prevalent vector in crypto community hacks.
-- [x] **High-Speed & Cost Efficient**: Sub-second latency (300-500ms) and 96% reduction in API calls via heuristics.
+- [x] **High-Speed & Cost Efficient**: Target de latencia en producción (300-600ms con Gemini directo; 1.5-2.3s vía aggregators como OpenRouter) y ~90-96% de reducción en llamadas API mediante pre-filtro heurístico.

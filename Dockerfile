@@ -12,4 +12,4 @@ RUN pip install --upgrade pip && \
 
 COPY . .
 
-CMD ["python", "bot.py"]
+CMD ["python", "sentinel_discord_bot.py"]

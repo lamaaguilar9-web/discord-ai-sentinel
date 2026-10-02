@@ -713,7 +713,7 @@ async def inspect_and_moderate(message: discord.Message, is_webhook: bool):
     await execute_moderation(bot, message, ai_result, is_webhook, on_chain)
 
 # ==============================================================================
-# 8. COMANDOS SLASH
+# 8. COMANDOS SLASH Y DE TEXTO DIRECTO (!)
 # ==============================================================================
 @bot.tree.command(name="sentinel-status", description="Muestra el estado operativo del centinela de seguridad.")
 async def cmd_status_slash(interaction: discord.Interaction):
@@ -723,6 +723,7 @@ async def cmd_status_slash(interaction: discord.Interaction):
     embed.add_field(name="Canal de Alertas", value=f"<#{Config.MOD_LOG_CHANNEL_ID}>" if Config.MOD_LOG_CHANNEL_ID else "No asignado", inline=True)
     embed.add_field(name="Umbral Nivel 1 (Alerta)", value=f"{Config.THRESHOLD_LEVEL_1_ALERT*100:.0f}%", inline=True)
     embed.add_field(name="Umbral Nivel 2 (Acción)", value=f"{Config.THRESHOLD_LEVEL_2_ACTION*100:.0f}%", inline=True)
+    embed.add_field(name="Servidores Conectados", value=str(len(bot.guilds)), inline=True)
     embed.set_footer(text="Sentinel Fleet Technologies | Web3 Cyberdefense")
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -732,7 +733,53 @@ async def cmd_setchannel_slash(interaction: discord.Interaction):
         await interaction.response.send_message("❌ Solo administradores.", ephemeral=True)
         return
     Config.MOD_LOG_CHANNEL_ID = interaction.channel_id
+    try:
+        env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+        if os.path.exists(env_path):
+            with open(env_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            new_content = re.sub(r"MOD_LOG_CHANNEL_ID=\d*", f"MOD_LOG_CHANNEL_ID={interaction.channel_id}", content)
+            with open(env_path, "w", encoding="utf-8") as f:
+                f.write(new_content)
+    except Exception as e:
+        logger.error(f"Error guardando MOD_LOG_CHANNEL_ID: {e}")
     await interaction.response.send_message(f"✅ Canal de alertas configurado a <#{interaction.channel_id}>.")
+
+@bot.tree.command(name="sentinel-test", description="Prueba el análisis semántico de un texto sin disparar moderación.")
+@app_commands.describe(texto="Texto sospechoso a evaluar")
+async def cmd_test_slash(interaction: discord.Interaction, texto: str):
+    await interaction.response.defer(ephemeral=True)
+    client = bot.http_client or httpx.AsyncClient(timeout=httpx.Timeout(4.5))
+    author_info = f"Simulación por Admin: {interaction.user.display_name}"
+    
+    on_chain_task = scan_solana_threats(texto, client)
+    ai_task = analyze_semantic_intent(texto, author_info, client)
+    on_chain_data, result = await asyncio.gather(on_chain_task, ai_task)
+
+    is_mal = result.get("is_malicious", False)
+    conf = result.get("confidence", 0.0)
+    color = discord.Color.red() if is_mal else discord.Color.green()
+
+    embed = discord.Embed(title="🧪 Resultado del Test Semántico IA", color=color)
+    embed.add_field(name="¿Es Malicioso?", value="🚨 SÍ" if is_mal else "✅ NO", inline=True)
+    embed.add_field(name="Confianza", value=f"**{conf * 100:.1f}%**", inline=True)
+    embed.add_field(name="Vector", value=f"`{result.get('attack_vector')}`", inline=True)
+    embed.add_field(name="Latencia Motor", value=f"{result.get('latency_ms')} ms", inline=True)
+
+    if on_chain_data and on_chain_data.get("detected"):
+        embed.add_field(
+            name="⛓️ Auditoría On-Chain Solana",
+            value=(
+                f"• Dirección: `{on_chain_data['address'][:8]}...{on_chain_data['address'][-6:]}`\n"
+                f"• Saldo: `{on_chain_data.get('balance_sol', 0)} SOL`\n"
+                f"• Riesgo On-Chain: **{on_chain_data.get('risk_assessment')}**"
+            ),
+            inline=False,
+        )
+
+    embed.add_field(name="Diagnóstico", value=result.get("reason", "Sin diagnóstico"), inline=False)
+    embed.add_field(name="Texto Evaluado", value=f"```{texto[:500]}```", inline=False)
+    await interaction.followup.send(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="sentinel-sync", description="Sincroniza los comandos de barra en este servidor.")
 async def cmd_sync_slash(interaction: discord.Interaction):
@@ -744,6 +791,109 @@ async def cmd_sync_slash(interaction: discord.Interaction):
     await bot.tree.sync(guild=interaction.guild)
     await interaction.followup.send(f"✅ Comandos slash sincronizados correctamente en este servidor.")
 
+# --- Comandos de Texto Directo (Prefijo !) ---
+@bot.command(name="status")
+async def cmd_status_text(ctx: commands.Context):
+    """Muestra el estado con !status"""
+    embed = discord.Embed(title="🛡️ Estado Operativo de Discord AI Sentinel", color=discord.Color.blue())
+    embed.add_field(name="Motor de IA", value=f"`{Config.OPENROUTER_MODEL}`", inline=False)
+    embed.add_field(name="Solana RPC", value=f"`{Config.SOLANA_RPC_URL}`", inline=False)
+    embed.add_field(name="Canal de Alertas", value=f"<#{Config.MOD_LOG_CHANNEL_ID}>" if Config.MOD_LOG_CHANNEL_ID else "No asignado", inline=True)
+    embed.add_field(name="Umbral Nivel 1 (Alerta)", value=f"{Config.THRESHOLD_LEVEL_1_ALERT*100:.0f}%", inline=True)
+    embed.add_field(name="Umbral Nivel 2 (Acción)", value=f"{Config.THRESHOLD_LEVEL_2_ACTION*100:.0f}%", inline=True)
+    embed.add_field(name="Servidores Conectados", value=str(len(bot.guilds)), inline=True)
+    embed.set_footer(text="Sentinel Fleet Technologies | Web3 Cyberdefense")
+    await ctx.send(embed=embed)
+
+@bot.command(name="setchannel")
+async def cmd_setchannel_text(ctx: commands.Context):
+    """Configura el canal actual con !setchannel"""
+    if not ctx.author.guild_permissions.administrator:
+        await ctx.send("❌ Solo los administradores pueden configurar el canal de seguridad.")
+        return
+    Config.MOD_LOG_CHANNEL_ID = ctx.channel.id
+    try:
+        env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+        if os.path.exists(env_path):
+            with open(env_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            new_content = re.sub(r"MOD_LOG_CHANNEL_ID=\d*", f"MOD_LOG_CHANNEL_ID={ctx.channel.id}", content)
+            with open(env_path, "w", encoding="utf-8") as f:
+                f.write(new_content)
+    except Exception as e:
+        logger.error(f"Error guardando MOD_LOG_CHANNEL_ID: {e}")
+    await ctx.send(f"✅ Canal de alertas configurado a <#{ctx.channel.id}>.")
+
+@bot.command(name="test")
+async def cmd_test_text(ctx: commands.Context, *, texto: str):
+    """Evalúa un texto sospechoso con !test <texto>"""
+    async with ctx.typing():
+        client = bot.http_client or httpx.AsyncClient(timeout=httpx.Timeout(4.5))
+        author_info = f"Test manual por Admin: {ctx.author.display_name}"
+        
+        on_chain_task = scan_solana_threats(texto, client)
+        ai_task = analyze_semantic_intent(texto, author_info, client)
+        on_chain_data, result = await asyncio.gather(on_chain_task, ai_task)
+
+    is_mal = result.get("is_malicious", False)
+    conf = result.get("confidence", 0.0)
+    color = discord.Color.red() if is_mal else discord.Color.green()
+
+    embed = discord.Embed(title="🧪 Resultado del Test Semántico IA", color=color)
+    embed.add_field(name="¿Es Malicioso?", value="🚨 SÍ" if is_mal else "✅ NO", inline=True)
+    embed.add_field(name="Confianza", value=f"**{conf * 100:.1f}%**", inline=True)
+    embed.add_field(name="Vector", value=f"`{result.get('attack_vector')}`", inline=True)
+    embed.add_field(name="Latencia Motor", value=f"{result.get('latency_ms')} ms", inline=True)
+
+    if on_chain_data and on_chain_data.get("detected"):
+        embed.add_field(
+            name="⛓️ Auditoría On-Chain Solana",
+            value=(
+                f"• Dirección: `{on_chain_data['address'][:8]}...{on_chain_data['address'][-6:]}`\n"
+                f"• Saldo: `{on_chain_data.get('balance_sol', 0)} SOL`\n"
+                f"• Riesgo On-Chain: **{on_chain_data.get('risk_assessment')}**"
+            ),
+            inline=False,
+        )
+
+    embed.add_field(name="Diagnóstico", value=result.get("reason", "Sin diagnóstico"), inline=False)
+    embed.add_field(name="Texto Evaluado", value=f"```{texto[:500]}```", inline=False)
+    await ctx.send(embed=embed)
+
+@bot.command(name="simular")
+async def cmd_simular_text(ctx: commands.Context):
+    """Simula una alerta de ataque crítica en modo DEMO honesto (GLM M5)."""
+    log_channel = bot.get_channel(Config.MOD_LOG_CHANNEL_ID) if Config.MOD_LOG_CHANNEL_ID else ctx.channel
+    if not log_channel:
+        await ctx.send("❌ No se encontró el canal de alertas configurado.")
+        return
+
+    sample_scam = "@everyone ¡URGENTE! Airdrop sorpresa oficial de Solana de $2,500 USDC para los primeros 50 usuarios: https://solana-claim-airdrop-drainer.xyz"
+
+    embed = discord.Embed(
+        title="[DEMO] 🛡️ Amenaza Crítica Neutralizada (Auto-Mod)",
+        color=discord.Color.red(),
+        timestamp=datetime.now(timezone.utc),
+    )
+    embed.add_field(name="Origen de la Amenaza", value="🚨 **WEBHOOK COMPROMETIDO (Simulado)**: `AnnouncementsBot`", inline=True)
+    embed.add_field(name="Vector Detectado", value="`AIRDROP_SCAM`", inline=True)
+    embed.add_field(name="Confianza IA", value="**—** (Modo DEMO Simulado)", inline=True)
+    embed.add_field(name="Canal de Ataque", value=ctx.channel.mention, inline=True)
+    embed.add_field(name="Tiempo de Reacción", value="—", inline=True)
+    embed.add_field(name="Acción Aplicada", value="Borrado preventivo + Timeout 10m (Simulado)", inline=True)
+    embed.add_field(
+        name="⛓️ Auditoría On-Chain Solana (Mainnet)",
+        value="• Billetera de Drenador: `7xKXtg2C...s45Y`\n• Saldo: `—` (Simulado)\n• Diagnóstico On-Chain: **ALTO (Simulado / Desechable)**",
+        inline=False,
+    )
+    embed.add_field(name="Diagnóstico Técnico", value="[DEMO] Simulación sintética de ingeniería social con mención global (@everyone), urgencia artificial y enlace a dominio simulado (.xyz).", inline=False)
+    embed.add_field(name="Copia de Seguridad del Mensaje", value=f"```{sample_scam}```", inline=False)
+    embed.set_footer(text="Discord AI Sentinel — Demostración de Alerta Interactiva (DEMO)")
+
+    await log_channel.send(embed=embed, view=PersistentRestoreView())
+    if log_channel != ctx.channel:
+        await ctx.send(f"✅ Alerta de prueba [DEMO] enviada a {log_channel.mention}")
+
 # ==============================================================================
 # 9. PUNTO DE ENTRADA PRINCIPAL
 # ==============================================================================
@@ -753,8 +903,10 @@ if __name__ == "__main__":
         logger.error("❌ ERROR: DISCORD_BOT_TOKEN no configurado.")
         print("\nDefine la variable de entorno antes de ejecutar:")
         print("  set DISCORD_BOT_TOKEN=tu_token_aqui (Windows CMD)")
-        print("  $env:DISCORD_BOT_TOKEN='tu_token_aqui' (PowerShell)\n")
+        print("  $env:DISCORD_BOT_TOKEN='tu_token_aqui' (PowerShell)")
+        print("  export DISCORD_BOT_TOKEN='tu_token_aqui' (Linux/Bash)\n")
         sys.exit(1)
 
     logger.info("Iniciando conexión con Discord Gateway...")
     bot.run(token)
+
