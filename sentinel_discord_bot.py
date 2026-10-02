@@ -53,7 +53,7 @@ class Config:
     OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
     OPENROUTER_MODEL: str = os.getenv("OPENROUTER_MODEL", "google/gemini-2.5-flash")
 
-    # Proveedor IA Directo (Google Gemini Studio - Gratis y baja latencia 300-600ms)
+    # Proveedor IA Directo (Google Gemini Studio - Gratis y latencia medida ~2.0s)
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
     
@@ -264,7 +264,7 @@ def evaluate_offline_heuristics(text: str, start_time: float, origin: str) -> Di
 async def analyze_semantic_intent(text: str, author_metadata: str, client: Optional[httpx.AsyncClient] = None) -> Dict[str, Any]:
     start_time = time.perf_counter()
 
-    # 1. Google Gemini API Directo (Latencia 300-600ms, Google AI Studio - Fail-Secure)
+    # 1. Google Gemini API Directo (Latencia medida ~2.0s en VPS, Google AI Studio - Fail-Secure)
     if Config.GEMINI_API_KEY:
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/"

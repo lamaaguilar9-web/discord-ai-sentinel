@@ -82,7 +82,7 @@ python simulate_attack.py
   [VEREDICTO IA]: 🚨 AMENAZA BLOQUEADA
     - Confianza: 96.0%
     - Vector: AIRDROP_SCAM
-    - Latencia: 380 ms
+    - Latencia: ~2.0s (medida en producción con gemini-3.1-flash-lite)
 
 ▶ Escenario: 5. Ataque Crítico: Webhook Comprometido
   [PRE-FILTRO]: 🔍 BANDERA ACTIVADA -> Webhook con enlace externo no verificado
