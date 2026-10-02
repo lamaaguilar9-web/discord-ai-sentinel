@@ -288,6 +288,7 @@ async def analyze_semantic_intent(text: str, author_metadata: str, client: Optio
             "generationConfig": {
                 "temperature": 0.1,
                 "response_mime_type": "application/json",
+                "thinkingConfig": {"thinkingBudget": 0},
             },
         }
         try:
@@ -297,7 +298,7 @@ async def analyze_semantic_intent(text: str, author_metadata: str, client: Optio
             if client and not client.is_closed:
                 resp = await do_gemini_post(client)
             else:
-                async with httpx.AsyncClient(timeout=8.0) as temp_client:
+                async with httpx.AsyncClient(timeout=10.0) as temp_client:
                     resp = await do_gemini_post(temp_client)
 
             if resp.status_code == 200:
