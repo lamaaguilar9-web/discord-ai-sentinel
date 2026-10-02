@@ -55,7 +55,7 @@ class Config:
 
     # Proveedor IA Directo (Google Gemini Studio - Gratis y baja latencia 300-600ms)
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
     
     # Configuración RPC Solana (Se recomienda QuickNode/Helius en producción)
     SOLANA_RPC_URL: str = os.getenv("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com")
